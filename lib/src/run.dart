@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:footage/src/renderer/renderer.dart';
 
@@ -10,7 +11,7 @@ void runVideo(
   bool timeline = true,
   bool panel = true,
 }) {
-  if (Platform.environment.containsKey('FLUTTER_TEST')) {
+  if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
     renderVideo(app);
   } else {
     previewVideo(
