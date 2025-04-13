@@ -56,7 +56,7 @@ class Sequence extends StatelessWidget {
       return VideoConfigProvider(
         config: childConfig,
         child: CurrentFrameProvider(
-          frame: durationInFrames - fromInFrames,
+          frame: durationInFrames,
           child: child,
         ),
       );
