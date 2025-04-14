@@ -28,77 +28,77 @@ Directory _defaultDirectory() {
 void renderVideo(
   Widget app, {
   Directory? directory,
+  Future<dynamic> Function()? callback,
 }) {
   final effectiveDirectory = directory ?? _defaultDirectory();
-  testWidgets(
-    'Rendering video',
-    (tester) async {
-      final binding = TestWidgetsFlutterBinding.ensureInitialized();
-      await binding.runAsync<String?>(() async {
-        await loadFonts();
+  // Overrides the test client for every test, so network call will work.
+  setUpAll(() => HttpOverrides.global = null);
+
+  testWidgets('Rendering video', (tester) async {
+    await tester.binding.runAsync<String?>(() async {
+      await loadFonts();
+      if (callback != null) {
+        await callback();
+      }
+      return null;
+    });
+    final controller = RenderFootageController();
+    final footage = Footage(controller: controller, child: app);
+
+    print('Loading composition...');
+    while (controller.config == null) {
+      await tester.pumpWidget(footage);
+    }
+
+    final config = controller.config!;
+    tester.view.devicePixelRatio =1.0;
+    tester.view.physicalSize = Size(
+      config.width.toDouble(),
+      config.height.toDouble(),
+    );
+
+    print('Creating directory $effectiveDirectory...');
+    effectiveDirectory.createSync(recursive: true);
+
+    print('Creating config...');
+    final configFile = File(join(effectiveDirectory.path, 'config.json'));
+    final configJson = jsonEncode({
+      'width': config.width,
+      'height': config.height,
+      'fps': config.fps,
+      'durationInFrames': config.durationInFrames,
+    });
+
+    print('Config : $configJson');
+    configFile.writeAsStringSync(configJson);
+
+    for (var frame = 0; frame < config.durationInFrames; frame++) {
+      print('Frame $frame/${config.durationInFrames}');
+      controller.updateFrame(frame);
+      await tester.pumpWidget(footage);
+      final imageFuture = captureImage(tester.allElements.first);
+
+      await tester.binding.runAsync<String?>(() async {
+        final image = await imageFuture;
+
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (bytes == null) {
+          return 'could not encode screenshot.';
+        }
+        final frameFile = File(
+          join(effectiveDirectory.path, 'frames', '$frame.png'),
+        );
+        print('Saving frame to $frameFile');
+        try {
+          await frameFile.parent.create(recursive: true);
+          await frameFile.writeAsBytes(bytes.buffer.asInt8List(), flush: true);
+        } catch (e) {
+          print('Failed: $e');
+        }
         return null;
       });
-      final controller = RenderFootageController();
-      final footage = Footage(
-        controller: controller,
-        child: app,
-      );
-
-      print('Loading composition...');
-      while (controller.config == null) {
-        await tester.pumpWidget(footage);
-      }
-
-      final config = controller.config!;
-      binding.window.devicePixelRatioTestValue = 1.0;
-      binding.window.physicalSizeTestValue = Size(
-        config.width.toDouble(),
-        config.height.toDouble(),
-      );
-
-      print('Creating directory $effectiveDirectory...');
-      effectiveDirectory.createSync(recursive: true);
-
-      print('Creating config...');
-      final configFile = File(join(effectiveDirectory.path, 'config.json'));
-      final configJson = jsonEncode({
-        'width': config.width,
-        'height': config.height,
-        'fps': config.fps,
-        'durationInFrames': config.durationInFrames,
-      });
-
-      print('Config : $configJson');
-      configFile.writeAsStringSync(configJson);
-
-      for (var frame = 0; frame < config.durationInFrames; frame++) {
-        print('Frame $frame/${config.durationInFrames}');
-        controller.updateFrame(frame);
-        await tester.pumpWidget(footage);
-        final imageFuture = captureImage(tester.allElements.first);
-
-        await binding.runAsync<String?>(() async {
-          final image = await imageFuture;
-
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          if (bytes == null) {
-            return 'could not encode screenshot.';
-          }
-          final frameFile =
-              File(join(effectiveDirectory.path, 'frames', '$frame.png'));
-          print('Saving frame to $frameFile');
-          try {
-            await frameFile.parent.create(recursive: true);
-            await frameFile.writeAsBytes(bytes.buffer.asInt8List(),
-                flush: true);
-          } catch (e) {
-            print('Failed: $e');
-          }
-          return null;
-        });
-      }
-    },
-  );
+    }
+  });
 }
 
 /// Render the closest [RepaintBoundary] of the [element] into an image.
@@ -110,7 +110,7 @@ Future<ui.Image> captureImage(Element element) {
   assert(element.renderObject != null);
   RenderObject renderObject = element.renderObject!;
   while (!renderObject.isRepaintBoundary) {
-    renderObject = renderObject.parent! as RenderObject;
+    renderObject = renderObject.parent!;
   }
   assert(!renderObject.debugNeedsPaint);
   final layer = renderObject.debugLayer! as OffsetLayer;

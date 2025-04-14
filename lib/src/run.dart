@@ -10,9 +10,10 @@ void runVideo(
   Widget app, {
   bool timeline = true,
   bool panel = true,
+  Future<dynamic> Function()? callback,
 }) {
   if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) {
-    renderVideo(app);
+    renderVideo(app,callback: callback);
   } else {
     previewVideo(
       app,
